@@ -7,6 +7,40 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// --- TEST BLOĞU BAŞLANGICI ---
+Console.WriteLine("!!! TERMINAL TEST: BURAYI GORMELISIN !!!");
+using (var scope = app.Services.CreateScope())
+{
+    Console.WriteLine("🚀 TradeMaster Mimari Testi Başlıyor...");
+
+    var stockId = Guid.NewGuid();
+
+    // 1. Yeni bir Hisse Senedi oluştur (StockCreated event'i tetiklenir)
+    var stock = new TradeMaster.Domain.Entities.Stock(
+        stockId,
+        "THYAO",
+        "Türk Hava Yolları",
+        250.50m
+    );
+
+    // 2. Fiyat güncellemeleri yap (StockPriceChanged event'leri tetiklenir)
+    stock.UpdatePrice(255.75m);
+    stock.UpdatePrice(260.10m);
+
+    // 3. Değişiklikleri (Olayları) kontrol et
+    var changes = stock.GetUncommittedChanges();
+    Console.WriteLine($"✅ Kaydedilmeyi bekleyen olay sayısı: {changes.Count()}");
+
+    // 4. REPLAY TESTİ: Sıfır bir nesneye bu olayları yükle
+    var reloadedStock = new TradeMaster.Domain.Entities.Stock();
+    reloadedStock.LoadFromHistory(changes);
+
+    Console.WriteLine($"🔍 Replay Sonucu:");
+    Console.WriteLine($"   Hisse: {reloadedStock.Symbol}");
+    Console.WriteLine($"   Son Fiyat: {reloadedStock.CurrentPrice} TL");
+}
+// --- TEST BLOĞU BİTİŞİ ---
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -16,25 +50,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
 
 app.Run();
 
