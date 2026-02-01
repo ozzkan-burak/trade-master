@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   trademaster-db:
-    image: postgres:latest
+    image: postgres:16-alpine # Daha kararlı bir sürüm
     container_name: trademaster-postgres
     ports:
       - '5433:5432'
@@ -9,8 +9,15 @@ services:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password123
       POSTGRES_DB: TradeMasterDB
+      PGDATA: /var/lib/postgresql/data/pgdata # PostgreSQL 18+ için gerekli
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U admin -d TradeMasterDB']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

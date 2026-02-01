@@ -2,36 +2,54 @@ namespace TradeMaster.Domain.Core;
 
 public abstract class AggregateRoot
 {
+  private readonly List<IDomainEvent> _uncommittedChanges = new();
+
   public Guid Id { get; protected set; }
-  public int Version { get; protected set; } = -1; // Versiyon takibi (Concurrency için)
+  public int Version { get; protected set; } = -1;
 
-  // Henüz veritabanına kaydedilmemiş yeni olaylar
-  private readonly List<IDomainEvent> _changes = new();
-
-  public IReadOnlyCollection<IDomainEvent> GetUncommittedChanges() => _changes.AsReadOnly();
+  public IEnumerable<IDomainEvent> GetUncommittedChanges()
+  {
+    return _uncommittedChanges;
+  }
 
   public void MarkChangesAsCommitted()
   {
-    _changes.Clear();
+    _uncommittedChanges.Clear();
+    Version++;
   }
 
-  // Geçmişten gelen olayları yükle ve nesneyi yeniden oluştur (Replay)
-  public void LoadFromHistory(IEnumerable<IDomainEvent> history)
+  // Event'i listeye ekler ve Apply metodunu çağırır (dynamic dispatch)
+  protected void ApplyChange(IDomainEvent @event)
   {
-    foreach (var e in history)
-    {
-      ApplyChange(e, isNew: false);
-    }
+    ApplyChange(@event, true);
   }
 
-  protected void ApplyChange(IDomainEvent @event, bool isNew = true)
+  private void ApplyChange(IDomainEvent @event, bool isNew)
   {
-    // C# dynamic kullanarak ilgili 'Apply' metodunu bul ve çalıştır
-    ((dynamic)this).Apply((dynamic)@event);
+    // Reflection ile Apply metodunu bulup çağırıyoruz
+    var applyMethod = GetType().GetMethod("Apply",
+        System.Reflection.BindingFlags.Instance |
+        System.Reflection.BindingFlags.NonPublic |
+        System.Reflection.BindingFlags.Public,
+        null,
+        new[] { @event.GetType() },
+        null);
+
+    applyMethod?.Invoke(this, new object[] { @event });
 
     if (isNew)
     {
-      _changes.Add(@event);
+      _uncommittedChanges.Add(@event);
+    }
+  }
+
+  // Event sourcing: Geçmiş eventlerden nesneyi yeniden oluştur
+  public void LoadFromHistory(IEnumerable<IDomainEvent> history)
+  {
+    foreach (var @event in history)
+    {
+      ApplyChange(@event, false); // Listeye ekleme, sadece state güncelle
+      Version++;
     }
   }
 }

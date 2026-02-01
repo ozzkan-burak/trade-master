@@ -1,3 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+using TradeMaster.Domain.Core;
+using TradeMaster.Domain.Entities;
+using TradeMaster.Infrastructure.Persistence;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -5,41 +10,41 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Database Configuration
+builder.Services.AddDbContext<TradeMasterDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IEventStore, EventStoreRepository>();
+
 var app = builder.Build();
 
-// --- TEST BLOĞU BAŞLANGICI ---
-Console.WriteLine("!!! TERMINAL TEST: BURAYI GORMELISIN !!!");
+/// --- GERÇEK DB TEST BLOĞU ---
 using (var scope = app.Services.CreateScope())
 {
-    Console.WriteLine("🚀 TradeMaster Mimari Testi Başlıyor...");
+    var eventStore = scope.ServiceProvider.GetRequiredService<IEventStore>();
 
-    var stockId = Guid.NewGuid();
+    // 1. ADIM: Az önce DB'ye kaydettiğin ID'yi buraya yapıştır
+    var idFromDb = Guid.Parse("cc2379cd-d847-4d86-aad3-672668dbb14b");
 
-    // 1. Yeni bir Hisse Senedi oluştur (StockCreated event'i tetiklenir)
-    var stock = new TradeMaster.Domain.Entities.Stock(
-        stockId,
-        "THYAO",
-        "Türk Hava Yolları",
-        250.50m
-    );
+    Console.WriteLine($"\n🔍 DB'den Geri Yükleme Testi Başlıyor (ID: {idFromDb})");
 
-    // 2. Fiyat güncellemeleri yap (StockPriceChanged event'leri tetiklenir)
-    stock.UpdatePrice(255.75m);
-    stock.UpdatePrice(260.10m);
+    // 2. ADIM: DB'den bu ID'ye ait tüm geçmiş olayları çekiyoruz
+    var storedEvents = eventStore.Get(idFromDb);
+    Console.WriteLine($"✅ DB'den {storedEvents.Count()} adet olay başarıyla çekildi.");
 
-    // 3. Değişiklikleri (Olayları) kontrol et
-    var changes = stock.GetUncommittedChanges();
-    Console.WriteLine($"✅ Kaydedilmeyi bekleyen olay sayısı: {changes.Count()}");
+    // 3. ADIM: Boş bir Stock nesnesi oluşturup geçmişi üzerine "yüklüyoruz"
+    var recoveredStock = new Stock();
+    recoveredStock.LoadFromHistory(storedEvents);
 
-    // 4. REPLAY TESTİ: Sıfır bir nesneye bu olayları yükle
-    var reloadedStock = new TradeMaster.Domain.Entities.Stock();
-    reloadedStock.LoadFromHistory(changes);
-
-    Console.WriteLine($"🔍 Replay Sonucu:");
-    Console.WriteLine($"   Hisse: {reloadedStock.Symbol}");
-    Console.WriteLine($"   Son Fiyat: {reloadedStock.CurrentPrice} TL");
+    // 4. ADIM: Sonuçları kontrol edelim
+    Console.WriteLine("------------------------------------------");
+    Console.WriteLine($"📈 Hisse Sembolü: {recoveredStock.Symbol}");
+    Console.WriteLine($"🏢 Şirket Adı  : {recoveredStock.Name}");
+    Console.WriteLine($"💰 Güncel Fiyat : {recoveredStock.CurrentPrice} TL");
+    Console.WriteLine("------------------------------------------");
+    Console.WriteLine("🚀 Tebrikler Mimar! Sistem geçmişten başarıyla ayağa kalktı.");
 }
-// --- TEST BLOĞU BİTİŞİ ---
+// ----------------------------
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
