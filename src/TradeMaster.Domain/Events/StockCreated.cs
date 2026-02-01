@@ -3,9 +3,11 @@ using TradeMaster.Domain.Core;
 namespace TradeMaster.Domain.Events;
 
 public record StockCreated(
-    Guid Id,
+    Guid AggregateId,
     string Symbol,
     string Name,
-    decimal InitialPrice,
-    DateTime OccurredOn
-) : IDomainEvent;
+    decimal Price
+) : IDomainEvent
+{
+    public DateTime OccurredOn { get; init; } = DateTime.UtcNow;
+}
