@@ -18,8 +18,16 @@ app.MapHub<StockHub>("/hubs/stocks");
 
 app.MapPost("/api/stocks/update", async (string symbol, decimal price, StockService stockService) =>
 {
+    // Servis içinde oluşturulan nesneyi geri dönmesini sağlayabiliriz
     await stockService.SaveAndBroadcastEvent(symbol, price);
-    return Results.Ok();
+
+    // Artık response boş olmayacak
+    return Results.Ok(new
+    {
+        Status = "Success",
+        Message = $"Event mühürlendi: {symbol} - {price} TL",
+        Time = DateTime.UtcNow
+    });
 });
 
 app.Run();
